@@ -16,6 +16,16 @@ variable "tenant_id" {
   type        = string
 }
 
+variable "client_id" {
+  description = "The client ID for Azure service principal"
+  type        = string
+}
+
+variable "client_secret" {
+  description = "The client secret for Azure service principal"
+  type        = string
+}
+
 variable "resource_group_name" {
   description = "The name of the resource group"
   type        = string
