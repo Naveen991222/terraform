@@ -12,10 +12,10 @@ pipeline {
         AZURE_SERVICE_PRINCIPAL = credentials('my-service-principal') // Ensure you have this credential in Jenkins
         AZURE_SUBSCRIPTION_ID = '7aee21bc-c6ef-473f-a848-4be3bb840d6c' // Replace with your actual subscription ID
         AZURE_TENANT_ID = 'ada79fc3-524b-4499-b38d-a5fb2ada3a2e' // Replace with your actual tenant ID
-        CLIENT_ID = var.CLIENT_ID
-        CLIENT_SECRET = var.CLIENT_SECRET
-        SUBSCRIPTION_ID = var.SUBSCRIPTION_ID 
-        TENANT_ID = var.TENANT_ID
+        CLIENT_ID = "${CLIENT_ID}"
+        CLIENT_SECRET = "${CLIENT_SECRET}"
+        SUBSCRIPTION_ID = "${SUBSCRIPTION_ID}"
+        TENANT_ID = "${TENANT_ID}"
     }
 
     stages {
