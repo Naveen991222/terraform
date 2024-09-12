@@ -1,6 +1,5 @@
 pipeline {
     agent any
-
     parameters {
         string(name: 'RESOURCE_GROUP_NAME', defaultValue: 'my-resource-group', description: 'The name of the Azure resource group.')
         string(name: 'AKS_CLUSTER_NAME', defaultValue: 'my-aks-cluster', description: 'The name of the AKS cluster.')
@@ -9,29 +8,36 @@ pipeline {
     }
 
     environment {
-        AZURE_SUBSCRIPTION_ID = credentials('azure-subscription-id')
-        AZURE_TENANT_ID = credentials('azure-tenant-id')
-        AZURE_CLIENT_ID = credentials('azure-client-id')
-        AZURE_CLIENT_SECRET = credentials('azure-client-secret')
+        AZURE_SERVICE_PRINCIPAL = credentials('my-service-principal') // Ensure you have this credential in Jenkins
+        CLIENT_ID = "${CLIENT_ID}"
+        CLIENT_SECRET = "${CLIENT_SECRET}"
+        SUBSCRIPTION_ID = "${SUBSCRIPTION_ID}"
+        TENANT_ID = "${TENANT_ID}"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Naveen991222/terraform-.git'
-                sh 'ls -la' // Check files in workspace
+               // Using 'checkout' for more control and adding credentials
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']], 
+                          userRemoteConfigs: [[url: 'https://github.com/Naveen991222/terraform.git', credentialsId: 'githubcreds']]])
+
+                // Verifying the files in the workspace
+                sh 'ls -la'
             }
         }
 
         stage('Azure CLI Login and Subscription') {
             steps {
                 script {
+                    def azureCreds = env.AZURE_SERVICE_PRINCIPAL.split(':')
+                    def clientId = azureCreds[0]
+                    def clientSecret = azureCreds[1]
+
                     sh """
                     #!/bin/bash
-                    echo "Logging in to Azure..."
-                    az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
-                    az account list --output table
-                    az account set --subscription ${env.AZURE_SUBSCRIPTION_ID} || echo "Failed to set subscription. Check if the subscription ID is correct and the service principal has access."
+                    az login --service-principal -u ${CLIENT_ID} -p ${CLIENT_SECRET} --tenant ${TENANT_ID}
+                    az account set --subscription ${SUBSCRIPTION_ID}
                     """
                 }
             }
@@ -42,7 +48,6 @@ pipeline {
                 script {
                     sh '''
                     #!/bin/bash
-                    set -e
                     terraform version
                     terraform init -upgrade
                     '''
@@ -56,12 +61,12 @@ pipeline {
                     sh '''
                     #!/bin/bash
                     terraform plan \
-                        -var "subscription_id=${env.AZURE_SUBSCRIPTION_ID}" \
-                        -var "tenant_id=${env.AZURE_TENANT_ID}" \
-                        -var "resource_group_name=${params.RESOURCE_GROUP_NAME}" \
-                        -var "aks_cluster_name=${params.AKS_CLUSTER_NAME}" \
-                        -var "location=${params.LOCATION}" \
-                        -var "node_count=${params.NODE_COUNT}" \
+                        -var "subscription_id=${SUBSCRIPTION_ID}" \
+                        -var "tenant_id=${TENANT_ID}" \
+                        -var "resource_group_name=${RESOURCE_GROUP_NAME}" \
+                        -var "aks_cluster_name=${AKS_CLUSTER_NAME}" \
+                        -var "location=${LOCATION}" \
+                        -var "node_count=${NODE_COUNT}" \
                         -out=tfplan
                     '''
                 }
@@ -73,15 +78,7 @@ pipeline {
                 script {
                     sh '''
                     #!/bin/bash
-                    set -e
-                    terraform apply \
-                        -var "subscription_id=${env.AZURE_SUBSCRIPTION_ID}" \
-                        -var "tenant_id=${env.AZURE_TENANT_ID}" \
-                        -var "resource_group_name=${params.RESOURCE_GROUP_NAME}" \
-                        -var "aks_cluster_name=${params.AKS_CLUSTER_NAME}" \
-                        -var "location=${params.LOCATION}" \
-                        -var "node_count=${params.NODE_COUNT}" \
-                        -auto-approve
+                    terraform apply -auto-approve tfplan
                     '''
                 }
             }
@@ -92,7 +89,6 @@ pipeline {
                 script {
                     sh '''
                     #!/bin/bash
-                    set -e
                     terraform output -raw kube_config > kube_config.yaml
                     '''
                 }
@@ -102,7 +98,7 @@ pipeline {
 
     post {
         always {
-            cleanWs()
+            cleanWs() // Clean up workspace after the job finishes
         }
     }
 }
