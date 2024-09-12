@@ -9,8 +9,8 @@ pipeline {
     }
 
     environment {
-        AZURE_SERVICE_PRINCIPAL = credentials('azure-service-principal1')
-        AZURE_SUBSCRIPTION_ID = ''// Replace with your actual subscription ID
+        AZURE_SERVICE_PRINCIPAL = credentials('azure-service-principal1') // Ensure you have this credential in Jenkins
+        AZURE_SUBSCRIPTION_ID = '' // Replace with your actual subscription ID
         AZURE_TENANT_ID = '' // Replace with your actual tenant ID
     }
 
@@ -18,7 +18,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/Naveen991222/terraform-.git'
-                sh 'ls -la' // Check files in workspace
+                sh 'ls -la' // Verify the files in the workspace
             }
         }
 
@@ -73,14 +73,7 @@ pipeline {
                 script {
                     sh '''
                     #!/bin/bash
-                    terraform apply \
-                        -var "subscription_id=${AZURE_SUBSCRIPTION_ID}" \
-                        -var "tenant_id=${AZURE_TENANT_ID}" \
-                        -var "resource_group_name=${RESOURCE_GROUP_NAME}" \
-                        -var "aks_cluster_name=${AKS_CLUSTER_NAME}" \
-                        -var "location=${LOCATION}" \
-                        -var "node_count=${NODE_COUNT}" \
-                        -auto-approve
+                    terraform apply -auto-approve tfplan
                     '''
                 }
             }
@@ -100,7 +93,7 @@ pipeline {
 
     post {
         always {
-            cleanWs()
+            cleanWs() // Clean up workspace after the job finishes
         }
     }
 }
