@@ -17,7 +17,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Naveen991222/terraform-.git'
+                git branch: 'main', url: 'https://github.com/Naveen991222/terraform.git'
                 sh 'ls -la' // Verify the files in the workspace
             }
         }
