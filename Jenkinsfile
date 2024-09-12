@@ -33,8 +33,8 @@ pipeline {
 
                     sh """
                     #!/bin/bash
-                    az login --service-principal -u ${clientId} -p ${clientSecret} --tenant ${AZURE_TENANT_ID}
-                    az account set --subscription ${AZURE_SUBSCRIPTION_ID}
+                    az login --service-principal -u ${CLIENT_ID} -p ${CLIENT_SECRET} --tenant ${TENANT_ID}
+                    az account set --subscription ${SUBSCRIPTION_ID}
                     """
                 }
             }
@@ -58,8 +58,8 @@ pipeline {
                     sh '''
                     #!/bin/bash
                     terraform plan \
-                        -var "subscription_id=${AZURE_SUBSCRIPTION_ID}" \
-                        -var "tenant_id=${AZURE_TENANT_ID}" \
+                        -var "subscription_id=${SUBSCRIPTION_ID}" \
+                        -var "tenant_id=${TENANT_ID}" \
                         -var "resource_group_name=${RESOURCE_GROUP_NAME}" \
                         -var "aks_cluster_name=${AKS_CLUSTER_NAME}" \
                         -var "location=${LOCATION}" \
