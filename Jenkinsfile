@@ -8,91 +8,72 @@ pipeline {
         string(name: 'NODE_COUNT', defaultValue: '1', description: 'The number of nodes in the AKS cluster.')
     }
 
-    environment {
-        AZURE_SERVICE_PRINCIPAL = credentials('my-service-principal') // Ensure you have this credential in Jenkins
-        CLIENT_ID = "${CLIENT_ID}"
-        CLIENT_SECRET = "${CLIENT_SECRET}"
-        SUBSCRIPTION_ID = "${SUBSCRIPTION_ID}"
-        TENANT_ID = "${TENANT_ID}"
-    }
-
     stages {
         stage('Checkout') {
             steps {
-               // Using 'checkout' for more control and adding credentials
-                checkout([$class: 'GitSCM', branches: [[name: '*/main']], 
-                          userRemoteConfigs: [[url: 'https://github.com/Naveen991222/terraform.git', credentialsId: 'githubcreds']]])
-
-                // Verifying the files in the workspace
-                sh 'ls -la'
+                git branch: 'main', url: 'https://github.com/Naveen991222/terraform.git'
+                sh 'ls -la' // Verify the files in the workspace
             }
         }
 
         stage('Azure CLI Login and Subscription') {
             steps {
-                script {
-                    def azureCreds = env.AZURE_SERVICE_PRINCIPAL.split(':')
-                    def clientId = azureCreds[0]
-                    def clientSecret = azureCreds[1]
-
-                    sh """
+                withCredentials([ 
+                    string(credentialsId: 'azure-client-id', variable: 'CLIENT_ID'),
+                    string(credentialsId: 'azure-client-secret', variable: 'CLIENT_SECRET'),
+                    string(credentialsId: 'azure-subscription-id', variable: 'SUBSCRIPTION_ID'),
+                    string(credentialsId: 'azure-tenant-id', variable: 'TENANT_ID')
+                ]) {
+                    sh '''
                     #!/bin/bash
-                    az login --service-principal -u ${CLIENT_ID} -p ${CLIENT_SECRET} --tenant ${TENANT_ID}
-                    az account set --subscription ${SUBSCRIPTION_ID}
-                    """
+                    az login --service-principal -u $CLIENT_ID -p $CLIENT_SECRET --tenant $TENANT_ID
+                    az account set --subscription $SUBSCRIPTION_ID
+                    '''
                 }
             }
         }
 
         stage('Terraform Init') {
             steps {
-                script {
-                    sh '''
-                    #!/bin/bash
-                    terraform version
-                    terraform init -upgrade
-                    '''
-                }
+                sh '''
+                #!/bin/bash
+                terraform version
+                terraform init -upgrade
+                '''
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                script {
-                    sh '''
-                    #!/bin/bash
-                    terraform plan \
-                        -var "subscription_id=${SUBSCRIPTION_ID}" \
-                        -var "tenant_id=${TENANT_ID}" \
-                        -var "resource_group_name=${RESOURCE_GROUP_NAME}" \
-                        -var "aks_cluster_name=${AKS_CLUSTER_NAME}" \
-                        -var "location=${LOCATION}" \
-                        -var "node_count=${NODE_COUNT}" \
-                        -out=tfplan
-                    '''
-                }
+                sh '''
+                #!/bin/bash
+                terraform plan \
+                    -var "subscription_id=${params.SUBSCRIPTION_ID}" \
+                    -var "tenant_id=${params.TENANT_ID}" \
+                    -var "resource_group_name=${params.RESOURCE_GROUP_NAME}" \
+                    -var "aks_cluster_name=${params.AKS_CLUSTER_NAME}" \
+                    -var "location=${params.LOCATION}" \
+                    -var "node_count=${params.NODE_COUNT}" \
+                    -out=tfplan
+                '''
             }
         }
 
         stage('Terraform Apply') {
             steps {
-                script {
-                    sh '''
-                    #!/bin/bash
-                    terraform apply -auto-approve tfplan
-                    '''
-                }
+                sh '''
+                #!/bin/bash
+                terraform apply -auto-approve tfplan
+                '''
             }
         }
 
         stage('Output') {
             steps {
-                script {
-                    sh '''
-                    #!/bin/bash
-                    terraform output -raw kube_config > kube_config.yaml
-                    '''
-                }
+                sh '''
+                #!/bin/bash
+                terraform output -raw kube_config > kube_config.yaml
+                '''
             }
         }
     }
