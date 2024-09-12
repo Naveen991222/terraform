@@ -19,8 +19,12 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Naveen991222/terraform.git'
-                sh 'ls -la' // Verify the files in the workspace
+               // Using 'checkout' for more control and adding credentials
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']], 
+                          userRemoteConfigs: [[url: 'https://github.com/Naveen991222/terraform.git', credentialsId: 'githubcreds']]])
+
+                // Verifying the files in the workspace
+                sh 'ls -la'
             }
         }
 
