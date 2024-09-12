@@ -9,10 +9,11 @@ pipeline {
     }
 
     environment {
-        AZURE_SUBSCRIPTION_ID = credentials('azure-subscription-id')
-        AZURE_TENANT_ID = credentials('azure-tenant-id')
-        AZURE_CLIENT_ID = credentials('azure-client-id')
-        AZURE_CLIENT_SECRET = credentials('azure-client-secret')
+        // Azure service principal credentials stored in Jenkins credentials
+        ARM_CLIENT_ID = credentials('azure-client-id')
+        ARM_CLIENT_SECRET = credentials('azure-client-secret')
+        ARM_SUBSCRIPTION_ID = credentials('azure-subscription-id')
+        ARM_TENANT_ID = credentials('azure-tenant-id')
     }
 
     stages {
@@ -23,15 +24,13 @@ pipeline {
             }
         }
 
-        stage('Azure CLI Login and Subscription') {
+        stage('Azure CLI Login and Set Subscription') {
             steps {
                 script {
                     sh """
                     #!/bin/bash
-                    echo "Logging in to Azure..."
-                    az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
-                    az account list --output table
-                    az account set --subscription ${env.AZURE_SUBSCRIPTION_ID} || echo "Failed to set subscription. Check if the subscription ID is correct and the service principal has access."
+                    az login --service-principal -u ${env.ARM_CLIENT_ID} -p ${env.ARM_CLIENT_SECRET} --tenant ${env.ARM_TENANT_ID}
+                    az account set --subscription ${env.ARM_SUBSCRIPTION_ID}
                     """
                 }
             }
@@ -40,12 +39,10 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 script {
-                    sh '''
+                    sh """
                     #!/bin/bash
-                    set -e
-                    terraform version
-                    terraform init -upgrade
-                    '''
+                    terraform init
+                    """
                 }
             }
         }
@@ -53,17 +50,17 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 script {
-                    sh '''
+                    sh """
                     #!/bin/bash
                     terraform plan \
-                        -var "subscription_id=${env.AZURE_SUBSCRIPTION_ID}" \
-                        -var "tenant_id=${env.AZURE_TENANT_ID}" \
+                        -var "subscription_id=${env.ARM_SUBSCRIPTION_ID}" \
+                        -var "tenant_id=${env.ARM_TENANT_ID}" \
                         -var "resource_group_name=${params.RESOURCE_GROUP_NAME}" \
                         -var "aks_cluster_name=${params.AKS_CLUSTER_NAME}" \
                         -var "location=${params.LOCATION}" \
                         -var "node_count=${params.NODE_COUNT}" \
                         -out=tfplan
-                    '''
+                    """
                 }
             }
         }
@@ -71,18 +68,10 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 script {
-                    sh '''
+                    sh """
                     #!/bin/bash
-                    set -e
-                    terraform apply \
-                        -var "subscription_id=${env.AZURE_SUBSCRIPTION_ID}" \
-                        -var "tenant_id=${env.AZURE_TENANT_ID}" \
-                        -var "resource_group_name=${params.RESOURCE_GROUP_NAME}" \
-                        -var "aks_cluster_name=${params.AKS_CLUSTER_NAME}" \
-                        -var "location=${params.LOCATION}" \
-                        -var "node_count=${params.NODE_COUNT}" \
-                        -auto-approve
-                    '''
+                    terraform apply -auto-approve tfplan
+                    """
                 }
             }
         }
@@ -90,11 +79,10 @@ pipeline {
         stage('Output') {
             steps {
                 script {
-                    sh '''
+                    sh """
                     #!/bin/bash
-                    set -e
                     terraform output -raw kube_config > kube_config.yaml
-                    '''
+                    """
                 }
             }
         }
@@ -102,7 +90,7 @@ pipeline {
 
     post {
         always {
-            cleanWs()
+            cleanWs() // Clean workspace after job completes
         }
     }
 }
