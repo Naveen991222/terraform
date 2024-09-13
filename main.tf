@@ -1,78 +1,40 @@
-pipeline {
-    agent any
+provider "azurerm" {
+  features {}
+  client_id       = var.client_id
+  client_secret   = var.client_secret
+  tenant_id       = var.tenant_id
+  subscription_id = var.subscription_id
+}
 
-    parameters {
-        string(name: 'RESOURCE_GROUP_NAME', defaultValue: 'my-resource-group', description: 'The name of the Azure resource group.')
-        string(name: 'AKS_CLUSTER_NAME', defaultValue: 'my-aks-cluster', description: 'The name of the AKS cluster.')
-        string(name: 'LOCATION', defaultValue: 'East US', description: 'The Azure region to deploy resources.')
-        string(name: 'NODE_COUNT', defaultValue: '1', description: 'The number of nodes in the AKS cluster.')
-    }
+# Resource group
+resource "azurerm_resource_group" "aks_rg" {
+  name     = var.resource_group_name
+  location = var.location
+}
 
-    stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main', url: 'https://github.com/Naveen991222/terraform.git'
-                sh 'ls -la' // Verify the files in the workspace
-            }
-        }
+# AKS Cluster
+resource "azurerm_kubernetes_cluster" "aks_cluster" {
+  name                = var.aks_cluster_name
+  location            = azurerm_resource_group.aks_rg.location
+  resource_group_name = azurerm_resource_group.aks_rg.name
+  dns_prefix          = var.aks_cluster_name
 
-        stage('Azure CLI Login and Subscription') {
-            steps {
-                withCredentials([azureServicePrincipal(credentialsId: 'my-service-principal', clientIdVariable: 'CLIENT_ID', clientSecretVariable: 'CLIENT_SECRET', tenantIdVariable: 'TENANT_ID', subscriptionIdVariable: 'SUBSCRIPTION_ID')]) {
-                    sh """
-                    az login --service-principal -u ${CLIENT_ID} -p ${CLIENT_SECRET} --tenant ${TENANT_ID}
-                    az account set --subscription ${SUBSCRIPTION_ID}
-                    """
-                }
-            }
-        }
+  default_node_pool {
+    name       = "default"
+    node_count = var.node_count
+    vm_size    = "Standard_DS2_v2"
+  }
 
-        stage('Terraform Init') {
-            steps {
-                sh '''
-                terraform version
-                terraform init -upgrade
-                '''
-            }
-        }
+  identity {
+    type = "SystemAssigned"
+  }
 
-        stage('Terraform Plan') {
-            steps {
-                sh '''
-                terraform plan \
-                    -var "subscription_id=${SUBSCRIPTION_ID}" \
-                    -var "tenant_id=${TENANT_ID}" \
-                    -var "client_id=${CLIENT_ID}" \
-                    -var "client_secret=${CLIENT_SECRET}" \
-                    -var "resource_group_name=${RESOURCE_GROUP_NAME}" \
-                    -var "aks_cluster_name=${AKS_CLUSTER_NAME}" \
-                    -var "location=${LOCATION}" \
-                    -var "node_count=${NODE_COUNT}" \
-                    -out=tfplan
-                '''
-            }
-        }
+  tags = {
+    Environment = var.environment
+  }
+}
 
-        stage('Terraform Apply') {
-            steps {
-                sh '''
-                terraform apply -auto-approve tfplan
-                '''
-            }
-        }
-
-        stage('Output') {
-            steps {
-                sh '''
-                terraform output -raw kube_config > kube_config.yaml
-                '''
-            }
-        
-    }
-
-    post {
-        always {
-            cleanWs() // Clean up workspace after the job finishes
-        }
-    }
+# Output the Kubernetes config
+output "kube_config" {
+  value = azurerm_kubernetes_cluster.aks_cluster.kube_config_raw
 }
