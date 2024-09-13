@@ -33,8 +33,3 @@ resource "azurerm_kubernetes_cluster" "aks_cluster" {
     Environment = var.environment
   }
 }
-
-# Output the Kubernetes config
-output "kube_config" {
-  value = azurerm_kubernetes_cluster.aks_cluster.kube_config_raw
-}
