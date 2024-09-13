@@ -20,7 +20,6 @@ pipeline {
             steps {
                 withCredentials([azureServicePrincipal(credentialsId: 'my-service-principal', clientIdVariable: 'CLIENT_ID', clientSecretVariable: 'CLIENT_SECRET', tenantIdVariable: 'TENANT_ID', subscriptionIdVariable: 'SUBSCRIPTION_ID')]) {
                     sh """
-                    #!/bin/bash
                     az login --service-principal -u ${CLIENT_ID} -p ${CLIENT_SECRET} --tenant ${TENANT_ID}
                     az account set --subscription ${SUBSCRIPTION_ID}
                     """
@@ -31,7 +30,6 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 sh '''
-                #!/bin/bash
                 terraform version
                 terraform init -upgrade
                 '''
@@ -41,10 +39,11 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 sh '''
-                #!/bin/bash
                 terraform plan \
                     -var "subscription_id=${SUBSCRIPTION_ID}" \
                     -var "tenant_id=${TENANT_ID}" \
+                    -var "client_id=${CLIENT_ID}" \
+                    -var "client_secret=${CLIENT_SECRET}" \
                     -var "resource_group_name=${RESOURCE_GROUP_NAME}" \
                     -var "aks_cluster_name=${AKS_CLUSTER_NAME}" \
                     -var "location=${LOCATION}" \
@@ -57,7 +56,6 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 sh '''
-                #!/bin/bash
                 terraform apply -auto-approve tfplan
                 '''
             }
@@ -66,7 +64,6 @@ pipeline {
         stage('Output') {
             steps {
                 sh '''
-                #!/bin/bash
                 terraform output -raw kube_config > kube_config.yaml
                 '''
             }
