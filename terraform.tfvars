@@ -1,0 +1,9 @@
+subscription_id = "SUBSCRIPTION_ID"
+tenant_id       = "TENANT_ID"
+client_id       = "CLIENT_ID"
+client_secret   = "CLIENT_SECRET"
+resource_group_name = "my-resource-group"
+aks_cluster_name = "my-aks-cluster"
+location = "East US"
+node_count = 2
+environment = "Development"
