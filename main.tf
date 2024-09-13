@@ -1,77 +1,78 @@
-provider "azurerm" {
-  features {}
-  client_id       = var.client_id
-  client_secret   = var.client_secret
-  tenant_id       = var.tenant_id
-  subscription_id = var.subscription_id
-}
+pipeline {
+    agent any
 
-variable "subscription_id" {
-  description = "The subscription ID for Azure"
-  type        = string
-}
+    parameters {
+        string(name: 'RESOURCE_GROUP_NAME', defaultValue: 'my-resource-group', description: 'The name of the Azure resource group.')
+        string(name: 'AKS_CLUSTER_NAME', defaultValue: 'my-aks-cluster', description: 'The name of the AKS cluster.')
+        string(name: 'LOCATION', defaultValue: 'East US', description: 'The Azure region to deploy resources.')
+        string(name: 'NODE_COUNT', defaultValue: '1', description: 'The number of nodes in the AKS cluster.')
+    }
 
-variable "tenant_id" {
-  description = "The tenant ID for Azure"
-  type        = string
-}
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Naveen991222/terraform.git'
+                sh 'ls -la' // Verify the files in the workspace
+            }
+        }
 
-variable "client_id" {
-  description = "The client ID for Azure service principal"
-  type        = string
-}
+        stage('Azure CLI Login and Subscription') {
+            steps {
+                withCredentials([azureServicePrincipal(credentialsId: 'my-service-principal', clientIdVariable: 'CLIENT_ID', clientSecretVariable: 'CLIENT_SECRET', tenantIdVariable: 'TENANT_ID', subscriptionIdVariable: 'SUBSCRIPTION_ID')]) {
+                    sh """
+                    az login --service-principal -u ${CLIENT_ID} -p ${CLIENT_SECRET} --tenant ${TENANT_ID}
+                    az account set --subscription ${SUBSCRIPTION_ID}
+                    """
+                }
+            }
+        }
 
-variable "client_secret" {
-  description = "The client secret for Azure service principal"
-  type        = string
-}
+        stage('Terraform Init') {
+            steps {
+                sh '''
+                terraform version
+                terraform init -upgrade
+                '''
+            }
+        }
 
-variable "resource_group_name" {
-  description = "The name of the resource group"
-  type        = string
-  default     = "my-resource-group"
-}
+        stage('Terraform Plan') {
+            steps {
+                sh '''
+                terraform plan \
+                    -var "subscription_id=${SUBSCRIPTION_ID}" \
+                    -var "tenant_id=${TENANT_ID}" \
+                    -var "client_id=${CLIENT_ID}" \
+                    -var "client_secret=${CLIENT_SECRET}" \
+                    -var "resource_group_name=${RESOURCE_GROUP_NAME}" \
+                    -var "aks_cluster_name=${AKS_CLUSTER_NAME}" \
+                    -var "location=${LOCATION}" \
+                    -var "node_count=${NODE_COUNT}" \
+                    -out=tfplan
+                '''
+            }
+        }
 
-variable "aks_cluster_name" {
-  description = "The name of the AKS cluster"
-  type        = string
-  default     = "my-aks-cluster"
-}
+        stage('Terraform Apply') {
+            steps {
+                sh '''
+                terraform apply -auto-approve tfplan
+                '''
+            }
+        }
 
-variable "location" {
-  description = "The Azure region to deploy resources"
-  type        = string
-  default     = "East US"
-}
+        stage('Output') {
+            steps {
+                sh '''
+                terraform output -raw kube_config > kube_config.yaml
+                '''
+            }
+        
+    }
 
-variable "node_count" {
-  description = "The number of nodes in the AKS cluster"
-  type        = number
-  default     = 1
-}
-
-resource "azurerm_resource_group" "example" {
-  name     = var.resource_group_name
-  location = var.location
-}
-
-resource "azurerm_kubernetes_cluster" "example" {
-  name                = var.aks_cluster_name
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
-  dns_prefix          = var.aks_cluster_name
-
-  default_node_pool {
-    name       = "default"
-    node_count = var.node_count
-    vm_size    = "Standard_DS2_v2"
-  }
-
-  identity {
-    type = "SystemAssigned"
-  }
-
-  tags = {
-    Environment = "Testing"
-  }
+    post {
+        always {
+            cleanWs() // Clean up workspace after the job finishes
+        }
+    }
 }
